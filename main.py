@@ -1,12 +1,17 @@
-# Tom Jarmran, 10/12/2020
-
+# Tom Jarman, 10/12/2020
 import pandas as pd
+import numpy as np
 import string
 
+# Preprocessing Constants
 MAP_SENTIMENT = False
 LOWERCASE = True
 NOISE_REMOVAL = True
 
+# Baysian Classifier Constants
+ALL_WORDS = True
+
+# Preprocessing Constants
 PUNCTUATION = string.punctuation.replace('!','')
 
 def MapSentimentScore(score):
@@ -59,8 +64,38 @@ def Preprocessing(structure):
             "Sentiment": sentiments}
 
     return pd.concat(data, axis=1)
+    
+
+def ComputePriorProbabilities(structure):
+    frequency = structure['Sentiment'].value_counts()
+    return frequency / structure.shape[0]
+
+
+def ComputeLikelihoods(structure):
+
+    # Spliting phrase column into individual words
+    split_phrases = structure.assign(Phrase=structure.Phrase.str.split(' ')).explode('Phrase')
+
+    # Removing rows with empty cell in phrase column
+    split_phrases['Phrase'].replace('', np.nan, inplace=True)
+    split_phrases.dropna(subset=['Phrase'], inplace=True)
+
+    # Counts occurrences of each word in each sentiment class
+    likelihoods = split_phrases.groupby(['Phrase','Sentiment']).size().reset_index(name='Counts')
+    sentiment_counts = split_phrases['Sentiment'].value_counts()
+    likelihoods['Total Sentiment Terms'] = likelihoods['Sentiment'].map(sentiment_counts)
+    likelihoods['Likelihood'] = likelihoods['Counts'] / likelihoods['Total Sentiment Terms']
+
+    return likelihoods
 
 
 if __name__ == "__main__":
-    data_structure = pd.read_csv("dev.tsv", sep='\t')
-    preprocessed_data = Preprocessing(data_structure)
+    train_data = pd.read_csv("train.tsv", sep='\t')
+    preprocessed_train_data = Preprocessing(train_data)
+    priors = ComputePriorProbabilities(preprocessed_train_data)
+
+    dev_data = pd.read_csv("dev.tsv",sep='\t')
+    preprocessed_dev_data = Preprocessing(dev_data)
+    likelihoods = ComputeLikelihoods(preprocessed_dev_data)
+    
+
